@@ -438,8 +438,10 @@ struct gptneox_file_loader {
         read_hparams();
         read_vocab();
         read_tensor_metadata(file_idx, tensors_map);
+        fprintf(stderr, "gptneox.cpp: loading model from %s end\n", fname);
     }
     void read_magic() {
+        fprintf(stderr, "gptneox.cpp: reading magic number\n");
         uint32_t magic = file.read_u32();
         uint32_t version = 0;
 
@@ -459,6 +461,7 @@ struct gptneox_file_loader {
         }
     }
     void read_hparams() {
+        fprintf(stderr, "gptneox.cpp: reading hparams\n");
         hparams.n_vocab = file.read_u32();
         hparams.n_ctx = file.read_u32();
         hparams.n_embd = file.read_u32();
@@ -467,8 +470,15 @@ struct gptneox_file_loader {
         hparams.n_rot = file.read_u32();
         hparams.use_parallel_residual = file.read_u32();
         hparams.ftype = (enum gptneox_ftype) file.read_u32();
+        fprintf(stderr, "gptneox.cpp: hparams read n_vocab = %u\n", hparams.n_vocab);
+        fprintf(stderr, "gptneox.cpp: hparams read n_ctx = %u\n", hparams.n_ctx);
+        fprintf(stderr, "gptneox.cpp: hparams read n_embd = %u\n", hparams.n_embd);
+        fprintf(stderr, "gptneox.cpp: hparams read n_head = %u\n", hparams.n_head);
+        fprintf(stderr, "gptneox.cpp: hparams read n_layer = %u\n", hparams.n_layer);
+        fprintf(stderr, "gptneox.cpp: hparams read n_rot = %u\n", hparams.n_rot);
     }
     void read_vocab() {
+        fprintf(stderr,"gptneox.cpp: reading vocab\n");
         vocab.id_to_token.resize(hparams.n_vocab);
 
         for (uint32_t i = 0; i < hparams.n_vocab; i++) {
@@ -489,14 +499,18 @@ struct gptneox_file_loader {
         }
     }
     void read_tensor_metadata(size_t file_idx, gptneox_load_tensors_map & tensors_map) {
+        fprintf(stderr,"gptneox.cpp: reading tensor metadata\n");
         while (file.tell() < file.size) {
+            fprintf(stderr,"gptneox.cpp: reading tensor metadata tell:%zu size:%zu\n", file.tell(), file.size);
             gptneox_load_tensor_shard shard;
             uint32_t n_dims = file.read_u32();
             uint32_t name_len = file.read_u32();
             shard.type = (enum ggml_type) file.read_u32();
+            fprintf(stderr,"gptneox.cpp: reading tensor metadata n_dims:%u name_len:%u type:%d\n", n_dims,name_len,shard.type);
             shard.ne.resize(n_dims);
             file.read_raw(shard.ne.data(), sizeof(shard.ne[0]) * n_dims);
             std::string name = file.read_string(name_len);
+            fprintf(stderr,"gptneox.cpp: reading tensor metadata n_dims:%u name_len:%u name:%s|%d\n", n_dims,name_len,name.c_str(),shard.type);
             if (n_dims < 1 || n_dims > 2) {
                 throw format("gptneox.cpp: tensor '%s' should not be %u-dimensional", name.c_str(), n_dims);
             }
@@ -509,6 +523,11 @@ struct gptneox_file_loader {
                 case GGML_TYPE_Q5_0:
                 case GGML_TYPE_Q5_1:
                 case GGML_TYPE_Q8_0:
+                case GGML_TYPE_Q2_K:
+                case GGML_TYPE_Q3_K:
+                case GGML_TYPE_Q4_K:
+                case GGML_TYPE_Q5_K:
+                case GGML_TYPE_Q6_K:
                     break;
                 default: {
                     throw format("unrecognized tensor type %u\n", shard.type);
@@ -521,9 +540,11 @@ struct gptneox_file_loader {
             }
             shard.file_idx = file_idx;
             shard.file_off = file.tell();
+            fprintf(stderr,"gptneox.cpp: reading tensor metadata shard.file_off:%zu size:%zu\n", shard.file_off, file.size);
 
             shard.calc_size();
             file.seek(shard.size, SEEK_CUR);
+            fprintf(stderr,"gptneox.cpp: reading tensor metadata shard.size:%zu size:%zu\n", shard.size, file.size);
 
             auto it = tensors_map.name_to_idx.find(name);
             size_t idx;
@@ -536,6 +557,7 @@ struct gptneox_file_loader {
             }
             tensors_map.tensors.at(idx).shards.push_back(shard);
         }
+        fprintf(stderr,"gptneox.cpp: reading tensor metadata end\n");
     }
 };
 
@@ -880,6 +902,16 @@ static const char *gptneox_ftype_name(enum gptneox_ftype ftype) {
         case GPTNEOX_FTYPE_MOSTLY_Q5_0: return "mostly Q5_0";
         case GPTNEOX_FTYPE_MOSTLY_Q5_1: return "mostly Q5_1";
         case GPTNEOX_FTYPE_MOSTLY_Q8_0: return "mostly Q8_0";
+        // K-quants
+        case GPTNEOX_FTYPE_MOSTLY_Q2_K: return "mostly Q2_K";
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_S: return "mostly Q3_K - Small";
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_M: return "mostly Q3_K - Medium";
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_L: return "mostly Q3_K - Large";
+        case GPTNEOX_FTYPE_MOSTLY_Q4_K_S: return "mostly Q4_K - Small";
+        case GPTNEOX_FTYPE_MOSTLY_Q4_K_M: return "mostly Q4_K - Medium";
+        case GPTNEOX_FTYPE_MOSTLY_Q5_K_S: return "mostly Q5_K - Small";
+        case GPTNEOX_FTYPE_MOSTLY_Q5_K_M: return "mostly Q5_K - Medium";
+        case GPTNEOX_FTYPE_MOSTLY_Q6_K: return "mostly Q6_K";
         default:                      return "unknown, may not work";
     }
 }
@@ -917,6 +949,8 @@ static void gptneox_model_load_internal(
     auto & hparams = model.hparams;
     
     {
+        // fprintf(stdout, "%s: file version = %s\n",  __func__, gptneox_file_version_name(file_version));
+        fprintf(stdout, "%s: n_layer    = %u\n",  __func__, hparams.n_layer);
         switch (hparams.n_layer) {
             case 16: {
                 if (hparams.n_embd < 6144) {

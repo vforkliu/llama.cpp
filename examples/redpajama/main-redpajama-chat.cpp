@@ -107,6 +107,7 @@ int main(int argc, char ** argv) {
         lparams.use_mmap   = params.use_mmap;
         lparams.use_mlock  = params.use_mlock;
         
+        fprintf(stdout,"%s: loading model '%s'\n", __func__, params.model.c_str());
         ctx = gptneox_init_from_file(params.model.c_str(), lparams);
         
         if (ctx == NULL) {
