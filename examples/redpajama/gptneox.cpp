@@ -250,6 +250,8 @@ struct gptneox_context {
     gptneox_buffer buf_compute;
     gptneox_buffer buf_scratch[GPTNEOX_MAX_SCRATCH_BUFFERS];
 
+    std::vector<uint8_t> work_buffer;
+
     int    buf_last = 0;
     size_t buf_max_size[GPTNEOX_MAX_SCRATCH_BUFFERS] = { 0 };
 
@@ -1082,6 +1084,17 @@ static bool gptneox_model_load(
     }
 }
 
+void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
+    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads);
+
+    if (plan.work_size > 0) {
+        buf.resize(plan.work_size);
+        plan.work_data = buf.data();
+    }
+
+    ggml_graph_compute(graph, &plan);
+}
+
 // evaluate the transformer
 //
 //   - lctx:      llama context
@@ -1092,9 +1105,9 @@ static bool gptneox_model_load(
 static bool gptneox_eval_internal(
         gptneox_context & lctx,
     const gptneox_token * tokens,
-            const int   n_tokens,
-            const int   n_past,
-            const int   n_threads) {
+            int   n_tokens,
+            int   n_past,
+            int   n_threads) {
     const int64_t t_start_us = ggml_time_us();
 
     const int N = n_tokens;
@@ -1126,8 +1139,10 @@ static bool gptneox_eval_internal(
 
     // for big prompts, if BLAS is enabled, it is better to use only one thread
     // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
+    // ggml_cgraph * gf = llama_build_graph(lctx, tokens, embd, n_tokens, n_past);
     ggml_cgraph gf = {};
-    gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_cublas() ? 1 : n_threads;
+    // gf.n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_cublas() ? 1 : n_threads;
+    n_threads = N >= 32 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas() ? 1 : n_threads;
 
     struct ggml_tensor * embd = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, N);
     memcpy(embd->data, tokens, N*ggml_element_size(embd));
@@ -1202,8 +1217,8 @@ static bool gptneox_eval_internal(
             // MARK: gptneox RoPE Q and K, before cache
             // Bit 2 for gptneox style (2)
             // Bit 1 is zero for dont skip n_past +(0), use (2+1) = (3) if rope is applied to cache of k (after cache only)
-            Qcur = ggml_rope(ctx0, Qcur, n_past, n_rot, 2);
-            Kcur = ggml_rope(ctx0, Kcur, n_past, n_rot, 2); //3);
+            Qcur = ggml_rope(ctx0, Qcur, n_past, n_rot, 2, 0);
+            Kcur = ggml_rope(ctx0, Kcur, n_past, n_rot, 2, 0); //3);
 
             // store key and value to memory, not required if prompt if only a single token (not practical or likely)
             //if (N >= 1) {
@@ -1403,7 +1418,8 @@ static bool gptneox_eval_internal(
 
     // run the computation
     ggml_build_forward_expand(&gf, inpL);
-    ggml_graph_compute       (ctx0, &gf);
+    // ggml_graph_compute       (ctx0, &gf);
+    ggml_graph_compute_helper(lctx.work_buffer, &gf, n_threads);
 
 #ifdef GGML_PERF
     // print timing information per ggml operation (for debugging purposes)
@@ -2398,6 +2414,7 @@ int gptneox_apply_lora_from_file_internal(struct gptneox_context * ctx, const ch
     // read tensors and apply
     bool warned = false;
     int n_tensors = 0;
+    std::vector<uint8_t> work_buffer;
     while (true) {
         int32_t n_dims;
         int32_t length;
@@ -2524,8 +2541,9 @@ int gptneox_apply_lora_from_file_internal(struct gptneox_context * ctx, const ch
             }
 
             struct ggml_cgraph gf = ggml_build_forward(r);
-            gf.n_threads = n_threads;
-            ggml_graph_compute(lora_ctx, &gf);
+            // gf.n_threads = n_threads;
+            // ggml_graph_compute(lora_ctx, &gf);
+            ggml_graph_compute_helper(work_buffer, &gf, n_threads);
 
             // we won't need these tensors again, reset the context to save memory
             ggml_free(lora_ctx);
