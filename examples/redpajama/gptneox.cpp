@@ -609,6 +609,11 @@ struct gptneox_file_saver {
             case GGML_TYPE_Q5_0:
             case GGML_TYPE_Q5_1:
             case GGML_TYPE_Q8_0:
+            case GGML_TYPE_Q2_K:
+            case GGML_TYPE_Q3_K:
+            case GGML_TYPE_Q4_K:
+            case GGML_TYPE_Q5_K:
+            case GGML_TYPE_Q6_K:
                 break;
             default: GPTNEOX_ASSERT(false);
         }
@@ -2122,6 +2127,16 @@ static void gptneox_model_quantize_internal(const std::string & fname_inp, const
         case GPTNEOX_FTYPE_MOSTLY_Q5_0: quantized_type = GGML_TYPE_Q5_0; break;
         case GPTNEOX_FTYPE_MOSTLY_Q5_1: quantized_type = GGML_TYPE_Q5_1; break;
         case GPTNEOX_FTYPE_MOSTLY_Q8_0: quantized_type = GGML_TYPE_Q8_0; break;
+        // K-quants
+        case GPTNEOX_FTYPE_MOSTLY_Q2_K:   quantized_type = GGML_TYPE_Q2_K; break;
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_S:
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_M:
+        case GPTNEOX_FTYPE_MOSTLY_Q3_K_L: quantized_type = GGML_TYPE_Q3_K; break;
+        case GPTNEOX_FTYPE_MOSTLY_Q4_K_S:
+        case GPTNEOX_FTYPE_MOSTLY_Q4_K_M: quantized_type = GGML_TYPE_Q4_K; break;
+        case GPTNEOX_FTYPE_MOSTLY_Q5_K_S:
+        case GPTNEOX_FTYPE_MOSTLY_Q5_K_M: quantized_type = GGML_TYPE_Q5_K; break;
+        case GPTNEOX_FTYPE_MOSTLY_Q6_K:   quantized_type = GGML_TYPE_Q6_K; break;
         default: throw format("invalid output file type %d\n", ftype);
     };
 

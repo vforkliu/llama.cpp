@@ -13,6 +13,9 @@ static const std::map<std::string, enum gptneox_ftype> GPTNEOX_FTYPE_MAP = {
   {"q5_0", GPTNEOX_FTYPE_MOSTLY_Q5_0},
   {"q5_1", GPTNEOX_FTYPE_MOSTLY_Q5_1},
   {"q8_0", GPTNEOX_FTYPE_MOSTLY_Q8_0},
+  {"q4_k_s", GPTNEOX_FTYPE_MOSTLY_Q4_K_S},
+  {"q4_k_m", GPTNEOX_FTYPE_MOSTLY_Q4_K_M},
+  {"q4_k", GPTNEOX_FTYPE_MOSTLY_Q4_K_M},
 };
 
 // usage:
