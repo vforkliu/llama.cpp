@@ -551,6 +551,7 @@ struct gptneox_file_loader {
             if (it != tensors_map.name_to_idx.end()) {
                 idx = it->second;
             } else {
+                // gptneox_load_tensor 有一个参数为字符串的构造函数
                 tensors_map.tensors.emplace_back(name);
                 idx = tensors_map.tensors.size() - 1;
                 tensors_map.name_to_idx.emplace(name, idx);
@@ -639,6 +640,7 @@ struct gptneox_model_loader {
     gptneox_model_loader(const std::string & fname_base, bool use_mmap, bool vocab_only) {
         auto first_file = new gptneox_file_loader(fname_base.c_str(), 0, tensors_map);
         file_loaders.emplace_back(first_file);
+        // 模型文件可能存在多个
         uint32_t n_parts = vocab_only ? 1 : guess_n_parts();
         for (uint32_t i = 1; i < n_parts; i++) {
             std::string fname = fname_base + "." + std::to_string(i);
