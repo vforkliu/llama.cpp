@@ -219,7 +219,7 @@ struct gptneox_vocab {
 };
 
 struct gptneox_context {
-    std::mt19937 rng;
+    std::mt19937 rng; // +0x00
 
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
@@ -233,27 +233,28 @@ struct gptneox_context {
     int32_t n_eval   = 0; // number of eval calls
     int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
 
-    gptneox_model model;
-    gptneox_vocab vocab;
+    gptneox_model model; // +0xA08
+    gptneox_vocab vocab; // +0xB00 sz = 0x40
 
-    size_t mem_per_token = 0;
+    size_t mem_per_token = 0; // +0xB40
 
     // decode output (2-dimensional array: [n_tokens][n_vocab])
-    std::vector<float> logits;
-    bool logits_all = false;
+    std::vector<float> logits; // + 0xB48 sz = 0x18
+    bool logits_all = false;   // + 0xB60
 
     // input embedding (1-dimensional array: [n_embd])
-    std::vector<float> embedding;
+    std::vector<float> embedding; // + 0xB68
 
     // memory buffers used to evaluate the model
     // TODO: move in gptneox_state
-    gptneox_buffer buf_compute;
-    gptneox_buffer buf_scratch[GPTNEOX_MAX_SCRATCH_BUFFERS];
+    gptneox_buffer buf_compute; // sz = 16  0xB80
+    gptneox_buffer buf_scratch[GPTNEOX_MAX_SCRATCH_BUFFERS]; // 16 0xB90 sz = 0x100
 
+    
+
+    int    buf_last = 0; // +0xC90
+    size_t buf_max_size[GPTNEOX_MAX_SCRATCH_BUFFERS] = { 0 }; // 16 0xc98
     std::vector<uint8_t> work_buffer;
-
-    int    buf_last = 0;
-    size_t buf_max_size[GPTNEOX_MAX_SCRATCH_BUFFERS] = { 0 };
 
     void use_buf(struct ggml_context * ctx, int i) {
 #if defined(GPTNEOX_USE_SCRATCH)
@@ -2288,6 +2289,18 @@ struct gptneox_context * gptneox_init_from_file(
                              const char * path_model,
             struct gptneox_context_params   params) {
     ggml_time_init();
+
+    printf("sizeof context:%lu\n", sizeof(gptneox_context));
+    printf("t_load_us:0x%x\n", offsetof(gptneox_context, t_load_us));
+    printf("t_load_us:0x%x\n", offsetof(gptneox_context, t_sample_us));
+    printf("t_load_us:0x%x\n", offsetof(gptneox_context, n_sample));
+    printf("model:0x%x\n", offsetof(gptneox_context, model));
+    printf("vocab:0x%x\n", offsetof(gptneox_context, vocab));
+    printf("logits:0x%x\n", offsetof(gptneox_context, logits));
+    printf("buf_compute:0x%x\n", offsetof(gptneox_context, buf_compute));
+    printf("buf_scratch:0x%x\n", offsetof(gptneox_context, buf_scratch));
+    printf("buf_scratch:0x%x\n", offsetof(gptneox_context, buf_last));
+    printf("buf_scratch:0x%x\n", offsetof(gptneox_context, buf_max_size));
 
     gptneox_context * ctx = new gptneox_context;
 

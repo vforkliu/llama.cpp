@@ -43,7 +43,7 @@ endif
 ifdef LLAMA_FAST
 OPT = -Ofast
 else
-OPT = -O0
+OPT = -O3
 endif
 CFLAGS   = -I.              $(OPT) -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples $(OPT) -std=c++11 -fPIC
